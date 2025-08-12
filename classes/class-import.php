@@ -110,6 +110,8 @@ class Import {
 	 * @return int|WP_Error Post ID on success, WP_Error on failure
 	 */
 	public function import_story( $story_data ) {
+		$story_data['tags']   = $story_data['tags'] ?? [];
+		$story_data['tags'][] = 'prx';
 
 		try {
 			// Start the post data.
@@ -117,8 +119,9 @@ class Import {
 				'post_title'        => $story_data['title'],
 				'post_date_gmt'     => $story_data['publishedAt'],
 				'post_modified_gmt' => $story_data['updatedAt'],
-				'tags_input'        => $story_data['tags'] ?? [],
+				'tags_input'        => $story_data['tags'],
 				'post_status'       => 'publish',
+				'post_type'         => 'post',
 			];
 
 			// If we only have a short description or a description, that should be post_content.
@@ -139,17 +142,16 @@ class Import {
 
 			// Check for existing post.
 			$existing_post = $this->get_post_by_prx_id( $story_data['id'] );
+			$action_text   = $existing_post ? 'Updated' : 'Imported';
 			$post_id       = 0;
-			$action_text   = 'Imported';
 
 			// If the post already exists.
 			if ( $existing_post ) {
+				$post_id         = $existing_post->ID;
+				$post_data['ID'] = $post_id;
+
 				if ( $this->options['dry_run'] ) {
-					$this->logger->info( "DRY RUN: Found existing post ID {$existing_post->ID} for PRX story {$story_data['id']} - would update" );
-					$post_id = $existing_post->ID;
-				} else {
-					$post_data['ID'] = $existing_post->ID;
-					$action_text = 'Updated';
+					$this->logger->info( "DRY RUN: Would update existing post ID {$post_id} for PRX story {$story_data['id']} - '{$story_data['title']}'" );
 				}
 			} else {
 				if ( $this->options['dry_run'] ) {
@@ -157,16 +159,17 @@ class Import {
 				}
 			}
 
-			// If not a dry run, update the post.
+			// If not a dry run, create or update the post.
 			if ( ! $this->options['dry_run'] ) {
-				$post_id = \wp_update_post( $post_data );
+				$result_post_id = \wp_update_post( $post_data );
 
-				if ( ! \is_wp_error( $post_id ) ) {
-					$post_url = \get_permalink( $post_id );
-					$this->logger->success( "{$action_text} existing post for PRX story {$story_data['id']}" );
-					$this->logger->info( "  Post URL: {$post_url}" );
-					$this->log_stored_data( $story_data, $post_id );
+				if ( \is_wp_error( $result_post_id ) ) {
+					$this->logger->error( "Failed to create/update post for PRX story {$story_data['id']}" );
+					return new \WP_Error( 'update_failed', 'Failed to create/update post for PRX story ' . $story_data['id'] );
 				}
+
+				// Use the actual post ID returned from wp_update_post.
+				$post_id = $result_post_id;
 			}
 
 			// Set ACF fields.
@@ -195,6 +198,12 @@ class Import {
 
 			// Import audio files.
 			$this->import_story_audio( $post_id, $story_data );
+
+			// Log the final result at the end.
+			if ( ! $this->options['dry_run'] ) {
+				$this->logger->success( "{$action_text} post for post ID {$post_id} - " . \get_permalink( $post_id ) );
+				$this->log_stored_data( $story_data, $post_id );
+			}
 
 			return $post_id;
 
@@ -492,28 +501,33 @@ class Import {
 	 * @return void
 	 */
 	private function log_stored_data( $story_data, $post_id = null ) {
-		$log_data = [
+		$log_data = [];
+
+		if ( $post_id ) {
+			$log_data['post_id']        = $post_id;
+			$log_data['post_url']       = \get_permalink( $post_id );
+			$log_data['featured_image'] = \get_the_post_thumbnail_url( $post_id ) ?: 'None';
+		}
+
+		// Add PRX data.
+		$log_data = array_merge( $log_data, [
 			'prx_id'    => $story_data['id'],
 			'title'     => $story_data['title'],
 			'duration'  => $story_data['duration'] . ' seconds',
 			'series'    => $story_data['_embedded']['prx:series']['title'],
 			'station'   => $story_data['_embedded']['prx:account']['shortName'],
-		];
+		] );
 
-		if ( $post_id ) {
-			$log_data['post_id']        = $post_id;
-			$featured_image_url         = \get_the_post_thumbnail_url( $post_id );
-			$log_data['featured_image'] = $featured_image_url ?: 'None';
-		}
-
+		// Add description.
 		if ( ! empty( $story_data['description'] ) ) {
-			$log_data['description'] = strip_tags( $story_data['description'] );
+			$log_data['description'] = substr( strip_tags( $story_data['description'] ), 0, 100 ) . '...';
 		}
 
+		// Add transcript.
 		if ( ! empty( $story_data['transcript'] ) ) {
 			$log_data['transcript'] = substr( $story_data['transcript'], 0, 100 ) . '...';
 		}
 
-		$this->logger->info( 'Story data: ' . json_encode( $log_data, JSON_PRETTY_PRINT ) );
+		$this->logger->info( 'Story data: ' . print_r( $log_data, true ) );
 	}
 }

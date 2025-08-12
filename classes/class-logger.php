@@ -6,9 +6,9 @@ namespace Ampers\PRXImport;
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 /**
- * PRX Import Logger class.
+ * Logger class.
  *
- * @version 0.1.0 Taken from Mai Performance Images plugin.
+ * @version 0.2.0
  *
  * @since 0.1.0
  */
@@ -73,6 +73,25 @@ class Logger {
 
 		// Format the message.
 		$formatted = sprintf( '%s [%s]: %s', $this->get_plugin_name(), strtoupper( $type ), $message );
+
+		// If running in WP-CLI, output directly to console.
+		if ( defined( 'WP_CLI' ) && \WP_CLI ) {
+			switch ( $type ) {
+				case 'error':
+					\WP_CLI::error( $formatted );
+					break;
+				case 'success':
+					\WP_CLI::success( $formatted );
+					break;
+				case 'warning':
+					\WP_CLI::warning( $formatted );
+					break;
+				default:
+					\WP_CLI::log( $formatted );
+					break;
+			}
+			return;
+		}
 
 		// If logging.
 		if ( defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
