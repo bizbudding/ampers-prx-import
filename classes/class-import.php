@@ -77,23 +77,27 @@ class Import {
 	 *
 	 * @since 2.0.0
 	 *
-	 * @param int $account_id Account ID.
-	 * @param int $page       Page number.
-	 * @param int $per_page   Items per page.
+	 * @param $args The arguments to pass to the API.
 	 *
 	 * @return array|WP_Error Stories data on success, WP_Error on failure
 	 */
-	public function get_account_stories( $account_id, $page = 1, $per_page = 10 ) {
-		$endpoint = "/authorization/accounts/{$account_id}/stories";
-		$args = [
+	public function get_account_stories( $args = [] ) {
+		$args = wp_parse_args( $args, [
+			'account_id' => account_id(),
+			'page'       => 1,
+			'per_page'   => 10,
+		] );
+
+		$endpoint     = "/authorization/accounts/{$args['account_id']}/stories";
+		$request_args = [
 			'method' => 'GET',
 			'body'   => [
-				'page' => $page,
-				'per'  => $per_page,
+				'page' => $args['page'],
+				'per'  => $args['per_page'],
 			],
 		];
 
-		return $this->auth->make_request( $endpoint, $args );
+		return $this->auth->make_request( $endpoint, $request_args );
 	}
 
 	/**
@@ -483,31 +487,33 @@ class Import {
 	 * @since 2.0.0
 	 *
 	 * @param array $story_data Story data from PRX API.
+	 * @param int   $post_id    Post ID.
 	 *
 	 * @return void
 	 */
 	private function log_stored_data( $story_data, $post_id = null ) {
-		$this->logger->info( "  PRX ID: {$story_data['id']}" );
+		$log_data = [
+			'prx_id'    => $story_data['id'],
+			'title'     => $story_data['title'],
+			'duration'  => $story_data['duration'] . ' seconds',
+			'series'    => $story_data['_embedded']['prx:series']['title'],
+			'station'   => $story_data['_embedded']['prx:account']['shortName'],
+		];
+
 		if ( $post_id ) {
-			$this->logger->info( "  Post ID: {$post_id}" );
-			$featured_image_url = \get_the_post_thumbnail_url( $post_id );
-			if ( $featured_image_url ) {
-				$this->logger->info( "  Featured Image: {$featured_image_url}" );
-			} else {
-				$this->logger->info( "  Featured Image: None" );
-			}
+			$log_data['post_id']        = $post_id;
+			$featured_image_url         = \get_the_post_thumbnail_url( $post_id );
+			$log_data['featured_image'] = $featured_image_url ?: 'None';
 		}
-		$this->logger->info( "  Title: {$story_data['title']}" );
-		$this->logger->info( "  Duration: {$story_data['duration']} seconds" );
-		$this->logger->info( "  Series: {$story_data['_embedded']['prx:series']['title']}" );
-		$this->logger->info( "  Station: {$story_data['_embedded']['prx:account']['shortName']}" );
 
 		if ( ! empty( $story_data['description'] ) ) {
-			$this->logger->info( "  Description: " . strip_tags( $story_data['description'] ) );
+			$log_data['description'] = strip_tags( $story_data['description'] );
 		}
 
 		if ( ! empty( $story_data['transcript'] ) ) {
-			$this->logger->info( "  Transcript: " . substr( $story_data['transcript'], 0, 100 ) . "..." );
+			$log_data['transcript'] = substr( $story_data['transcript'], 0, 100 ) . '...';
 		}
+
+		$this->logger->info( 'Story data: ' . json_encode( $log_data, JSON_PRETTY_PRINT ) );
 	}
 }

@@ -91,9 +91,9 @@ class CLI {
 		$auth = new Auth();
 		$import = new Import( $auth );
 
-		// Test network stories (Network ID 7)
-		WP_CLI::log( "Testing Network ID 7 stories..." );
-		$network_stories = $import->get_network_stories( 7, 1, $limit );
+		// Test network stories.
+		WP_CLI::log( "Testing Network ID " . network_id() . " stories..." );
+		$network_stories = $import->get_network_stories( network_id(), 1, $limit );
 
 		if ( is_wp_error( $network_stories ) ) {
 			WP_CLI::error( 'Network stories failed: ' . $network_stories->get_error_message() );
@@ -110,9 +110,13 @@ class CLI {
 			}
 		}
 
-		// Test account stories (Ampers account 197472)
-		WP_CLI::log( "Testing Account ID 197472 stories..." );
-		$account_stories = $import->get_account_stories( 197472, 1, $limit );
+		// Test account stories.
+		WP_CLI::log( "Testing Account ID " . account_id() . " stories..." );
+		$account_stories = $import->get_account_stories( [
+			'account_id' => account_id(),
+			'page'       => 1,
+			'per_page'   => $limit,
+		] );
 
 		if ( is_wp_error( $account_stories ) ) {
 			WP_CLI::error( 'Account stories failed: ' . $account_stories->get_error_message() );
@@ -207,7 +211,7 @@ class CLI {
 				if ( ! empty( $account['_embedded']['prx:series']['_embedded']['prx:items'] ) ) {
 					WP_CLI::log( "Series:" );
 					foreach ( $account['_embedded']['prx:series']['_embedded']['prx:items'] as $series ) {
-						WP_CLI::log( "  - {$series['title']} (ID: {$series['id']}, Stories: {$series['_links']['prx:stories']['count']})" );
+						WP_CLI::log( "  - {$series['title']} (ID: {$series['id']}, Stories: " . count( $series['_links']['prx:items'] ) . ")" );
 					}
 				}
 			}
@@ -256,7 +260,7 @@ class CLI {
 	 * @return void
 	 */
 	public function import_prx( $args, $assoc_args ) {
-		$account_id = isset( $assoc_args['account-id'] ) ? intval( $assoc_args['account-id'] ) : 197472;
+		$account_id = isset( $assoc_args['account-id'] ) ? intval( $assoc_args['account-id'] ) : account_id();
 		$per_page   = isset( $assoc_args['per-page'] ) ? intval( $assoc_args['per-page'] ) : 10;
 		$page       = isset( $assoc_args['page'] ) ? intval( $assoc_args['page'] ) : 1;
 		$dry_run    = isset( $assoc_args['dry-run'] );
@@ -282,7 +286,11 @@ class CLI {
 		$import = new Import( $auth, $import_args );
 
 		// Get stories from account
-		$stories = $import->get_account_stories( $account_id, $page, $per_page );
+		$stories = $import->get_account_stories( [
+			'account_id' => $account_id,
+			'page'       => $page,
+			'per_page'   => $per_page,
+		] );
 
 		if ( is_wp_error( $stories ) ) {
 			WP_CLI::error( 'Failed to fetch stories: ' . $stories->get_error_message() );

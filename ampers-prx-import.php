@@ -14,37 +14,36 @@
 
 namespace Ampers\PRXImport;
 
+// Exit if accessed directly.
 defined( 'ABSPATH' ) || exit;
 
+// Load classes.
 require_once __DIR__ . '/classes/class-auth.php';
 require_once __DIR__ . '/classes/class-cron.php';
 require_once __DIR__ . '/classes/class-import.php';
 require_once __DIR__ . '/classes/class-cli.php';
 require_once __DIR__ . '/classes/class-logger.php';
 
+// Initialize cron.
+new Cron( [
+	'account_id'     => account_id(),
+	'interval_hours' => 3,
+] );
+
 /**
- * Initialize the PRX Import plugin.
+ * The account ID to import from.
  *
- * @since 2.0.0
+ * @return int
  */
-function init_prx_import() {
-		// Initialize cron job (replace 123 with your actual account ID)
-	// The cron job will run every 3 hours by default and check 50 stories per run
-	$cron = new Cron( 123 );
-
-	// Example: Change the interval to 6 hours if needed
-	// $cron->set_interval( 6 );
-
-	// Example: Change the number of stories to check per run
-	// $cron->set_stories_per_run( 25 );
-
-	// Example: Manually trigger the cron job
-	// $results = $cron->manual_check();
-	// if ( ! is_wp_error( $results ) ) {
-	//     echo "New stories: " . $results['new_stories'] . "\n";
-	//     echo "Updated stories: " . $results['updated_stories'] . "\n";
-	// }
+function account_id() {
+	return 197472;
 }
 
-// Initialize the plugin
-add_action( 'init', __NAMESPACE__ . '\\init_prx_import' );
+/**
+ * The network ID to import from.
+ *
+ * @return int
+ */
+function network_id() {
+	return 7;
+}

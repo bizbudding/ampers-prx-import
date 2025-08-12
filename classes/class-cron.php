@@ -10,15 +10,14 @@ namespace Ampers\PRXImport;
  * @since 2.0.0
  */
 class Cron {
-
 	/**
-	 * Default interval in hours for checking new stories.
+	 * Account ID to check for new stories.
 	 *
 	 * @since 2.0.0
 	 *
 	 * @var int
 	 */
-	private $interval_hours = 3;
+	private $account_id;
 
 	/**
 	 * Number of stories to check per cron run.
@@ -30,13 +29,31 @@ class Cron {
 	private $stories_per_run = 50;
 
 	/**
-	 * Account ID to check for new stories.
+	 * Default interval in hours for checking new stories.
 	 *
 	 * @since 2.0.0
 	 *
 	 * @var int
 	 */
-	private $account_id;
+	private $interval_hours = 3;
+
+	/**
+	 * Cron key for the cron job.
+	 *
+	 * @since 2.0.0
+	 *
+	 * @var string
+	 */
+	private $cron_key;
+
+	/**
+	 * Interval key for cron.
+	 *
+	 * @since 2.0.0
+	 *
+	 * @var string
+	 */
+	private $interval_key;
 
 	/**
 	 * Logger instance.
@@ -52,36 +69,29 @@ class Cron {
 	 *
 	 * @since 2.0.0
 	 *
-	 * @param int $account_id Account ID to check for new stories.
-	 * @param int $interval_hours Interval in hours (default: 3).
+	 * @param array $args Arguments.
 	 */
-	public function __construct( $account_id, $interval_hours = 3 ) {
-		$this->account_id    = $account_id;
-		$this->interval_hours = $interval_hours;
-		$this->logger        = Logger::get_instance();
+	public function __construct( $args = [] ) {
+		$args = wp_parse_args( $args, [
+			'account_id'     => account_id(),
+			'interval_hours' => 3,
+		] );
 
-		// Hook into WordPress cron
-		add_action( 'init', [ $this, 'schedule_cron' ] );
-		add_action( 'prx_import_check_new_stories', [ $this, 'check_new_stories' ] );
+		$this->account_id     = $args['account_id'];
+		$this->interval_hours = $args['interval_hours'];
+		$this->cron_key       = 'prx_import_check_new_stories';
+		$this->interval_key   = 'prx_import_every_' . $this->interval_hours . '_hours';
+		$this->logger         = Logger::get_instance();
 
-		// Handle plugin deactivation
-		register_deactivation_hook( __FILE__, [ $this, 'clear_schedule' ] );
-	}
-
-	/**
-	 * Schedule the cron job.
-	 *
-	 * @since 2.0.0
-	 *
-	 * @return void
-	 */
-	public function schedule_cron() {
-		if ( ! wp_next_scheduled( 'prx_import_check_new_stories' ) ) {
-			wp_schedule_event( time(), 'custom_interval', 'prx_import_check_new_stories' );
-		}
-
-		// Add custom cron interval
+		// Add custom cron interval.
 		add_filter( 'cron_schedules', [ $this, 'add_cron_interval' ] );
+
+		// Hook into WordPress cron.
+		add_action( 'init',          [ $this, 'schedule_cron' ] );
+		add_action( $this->cron_key, [ $this, 'check_new_stories' ] );
+
+		// Handle plugin deactivation.
+		register_deactivation_hook( __FILE__, [ $this, 'clear_schedule' ] );
 	}
 
 	/**
@@ -94,12 +104,29 @@ class Cron {
 	 * @return array Modified cron schedules.
 	 */
 	public function add_cron_interval( $schedules ) {
-		$schedules['custom_interval'] = [
+		$schedules[ $this->interval_key ] = [
 			'interval' => $this->interval_hours * HOUR_IN_SECONDS,
 			'display'  => sprintf( __( 'Every %d hours', 'prx-import' ), $this->interval_hours ),
 		];
 
 		return $schedules;
+	}
+
+	/**
+	 * Schedule the cron job.
+	 *
+	 * @since 2.0.0
+	 *
+	 * @return void
+	 */
+	public function schedule_cron() {
+		// Bail if the cron job is already scheduled.
+		if ( wp_next_scheduled( $this->cron_key ) ) {
+			return;
+		}
+
+		// Schedule the cron job.
+		wp_schedule_event( time(), $this->interval_key, $this->cron_key );
 	}
 
 	/**
@@ -110,7 +137,7 @@ class Cron {
 	 * @return void
 	 */
 	public function clear_schedule() {
-		wp_clear_scheduled_hook( 'prx_import_check_new_stories' );
+		wp_clear_scheduled_hook( $this->cron_key );
 	}
 
 	/**
@@ -121,58 +148,47 @@ class Cron {
 	 * @return array|WP_Error Results array on success, WP_Error on failure.
 	 */
 	public function check_new_stories() {
+		$this->logger->info( "Cron job started" );
+
 		$results = [
-			'new_stories' => 0,
+			'new_stories'     => 0,
 			'updated_stories' => 0,
-			'errors' => [],
-			'last_run' => current_time( 'mysql' ),
+			'errors'          => [],
+			'last_run'        => current_time( 'mysql' ),
 		];
 
 		try {
-			// Initialize auth and import (like in CLI)
-			$auth = new Auth();
+			// Initialize auth and import (like in CLI).
+			$auth   = new Auth();
 			$import = new Import( $auth );
 
-			// Get stories from the API (most recent stories)
-			$stories_response = $import->get_account_stories( $this->account_id, 1, $this->stories_per_run );
+			// Get stories from the API (most recent stories).
+			$stories_response = $import->get_account_stories( [
+				'account_id' => $this->account_id,
+				'page'       => 1,
+				'per_page'   => $this->stories_per_run,
+			] );
 
+			// Bail if there was an error.
 			if ( is_wp_error( $stories_response ) ) {
 				$results['errors'][] = 'Failed to fetch stories from PRX API: ' . $stories_response->get_error_message();
 				$this->logger->error( 'Failed to fetch stories from PRX API: ' . $stories_response->get_error_message() );
 				return $results;
 			}
 
-			// Check if we have stories
-			if ( empty( $stories_response['_embedded']['prx:stories'] ) ) {
+			// Get stories.
+			$stories = $stories_response['_embedded']['prx:items'] ?? [];
+
+			// Bail if there are no stories.
+			if ( empty( $stories ) ) {
 				$this->logger->info( 'No stories found in PRX API response' );
 				return $results;
 			}
 
-			$stories = $stories_response['_embedded']['prx:stories'];
-			$new_stories_count = 0;
-			$updated_stories_count = 0;
-
+			// Import stories.
 			foreach ( $stories as $story ) {
-				$import_result = $import->import_story( $story );
-
-				if ( ! is_wp_error( $import_result ) ) {
-					// Check if this was a new story or update by looking at the existing post
-					$existing_post = $import->get_post_by_prx_id( $story['id'] );
-					if ( $existing_post && $existing_post->ID == $import_result ) {
-						$updated_stories_count++;
-						$this->logger->success( "Updated story: {$story['title']} (PRX ID: {$story['id']})" );
-					} else {
-						$new_stories_count++;
-						$this->logger->success( "Imported new story: {$story['title']} (PRX ID: {$story['id']})" );
-					}
-				} else {
-					$results['errors'][] = "Failed to import story {$story['id']}: " . $import_result->get_error_message();
-					$this->logger->error( "Failed to import story {$story['id']}: " . $import_result->get_error_message() );
-				}
+				$import->import_story( $story );
 			}
-
-			$results['new_stories'] = $new_stories_count;
-			$results['updated_stories'] = $updated_stories_count;
 
 			// Log summary
 			$this->logger->info( "Cron job completed: {$new_stories_count} new stories, {$updated_stories_count} updated stories" );
@@ -185,8 +201,4 @@ class Cron {
 
 		return $results;
 	}
-
-
-
-
 }
