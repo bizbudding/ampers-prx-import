@@ -1,186 +1,195 @@
 # AMPERS PRX Import Plugin
 
-A WordPress plugin for importing content from the PRX CMS API into WordPress. This plugin provides both WP-CLI commands and a web interface for managing PRX content imports.
+A WordPress plugin for importing content from the PRX CMS API into WordPress. This plugin provides WP-CLI commands for managing PRX content imports and includes an automated cron job for regular content updates.
 
 ## Features
 
 - **OAuth2 Authentication**: Secure authentication with PRX using OAuth2 client credentials flow
-- **Multi-Environment Support**: Works with both staging and production PRX environments
-- **WP-CLI Integration**: Command-line tools for bulk imports and testing
-- **Admin Interface**: WordPress admin settings page for configuration
-- **Class-Based Architecture**: Clean, maintainable code structure
+- **Automated Cron Jobs**: Scheduled imports every 3 hours to check for new stories
+- **WP-CLI Integration**: Command-line tools for bulk imports, testing, and debugging
+- **Advanced Custom Fields Integration**: Stores PRX metadata in custom fields
+- **Media Import**: Automatically downloads and attaches featured images and audio files
+- **Comprehensive Logging**: Detailed logging with WP-CLI console output support
+- **Dry Run Mode**: Test imports without making changes
 
 ## Requirements
 
-- WordPress 5.0 or higher
-- PHP 7.4 or higher
+- WordPress 6.5 or higher
+- PHP 8.2 or higher
 - WP-CLI (for command-line functionality)
-- Advanced Custom Fields (ACF) plugin (for custom fields)
+- Advanced Custom Fields (ACF) plugin
+- WP-Crontrol plugin (for cron job management)
 
 ## Installation
 
 1. Upload the plugin files to `/wp-content/plugins/ampers-prx-import/`
 2. Activate the plugin through the 'Plugins' menu in WordPress
-3. Configure your PRX API credentials in the admin settings
+4. Configure your PRX API credentials (see Configuration section)
 
 ## Configuration
 
-### Getting PRX API Credentials
+### PRX API Credentials
 
-You'll need to obtain OAuth2 client credentials from PRX:
-
-1. **For Staging**: Visit https://id.staging.prx.tech/client_applications
-2. **For Production**: Visit https://id.prx.org/client_applications
-
-Note: OAuth applications must be manually created by PRX. Contact PRX support to request access.
-
-### Setting Up Credentials
-
-#### Option 1: WordPress Admin Interface
-
-1. Go to **Settings > PRX Import** in your WordPress admin
-2. Select your environment (staging or production)
-3. Enter your Client ID and Client Secret
-4. Save the settings
-
-#### Option 2: WordPress Options (Programmatically)
+The plugin requires OAuth2 client credentials from PRX. These should be configured in your WordPress environment:
 
 ```php
-update_option( 'ampers_prx_client_id', 'your_client_id' );
-update_option( 'ampers_prx_client_secret', 'your_client_secret' );
-update_option( 'ampers_prx_environment', 'production' ); // or 'staging'
+// Add to wp-config.php or use environment variables
+define( 'PRX_CLIENT_ID', 'your_client_id' );
+define( 'PRX_CLIENT_SECRET', 'your_client_secret' );
 ```
 
+### Account Configuration
+
+The plugin is configured for the Ampers account (ID: 197472) by default. To change this, modify the `account_id()` function in `ampers-prx-import.php`.
+
 ## Usage
+
+### Automated Cron Jobs
+
+The plugin automatically sets up a cron job that runs every 3 hours to check for new stories. This can be managed through the WP-Crontrol plugin.
 
 ### WP-CLI Commands
 
 #### Testing Authentication
 
-Test your PRX API connection:
+```bash
+# Test PRX API connection
+wp ampers test-auth
+```
+
+#### Testing Story Retrieval
 
 ```bash
-# Test with credentials from WordPress options
-wp ampers test-auth
+# Test fetching stories from PRX
+wp ampers test-stories --limit=5
+```
 
-# Test with specific credentials
-wp ampers test-auth --environment=staging --client-id=your_id --client-secret=your_secret
+#### Listing PRX Accounts
 
-# Test production environment
-wp ampers test-auth --environment=production
+```bash
+# List available PRX accounts
+wp ampers list-accounts
 ```
 
 #### Importing Content
 
-Import stories from a PRX network:
+```bash
+# Import stories from PRX (default: 10 stories, page 1)
+wp ampers import-prx
+
+# Import with custom parameters
+wp ampers import-prx --account-id=197472 --per-page=25 --page=1
+
+# Perform a dry run (no changes made)
+wp ampers import-prx --per-page=10 --page=1 --dry-run
+
+# Import from specific page
+wp ampers import-prx --per-page=10 --page=2
+```
+
+#### Utility Commands
 
 ```bash
-# Import 10 stories from network 7 (Ampers)
-wp ampers import-prx --network-id=7 --limit=10
+# Check meta fields on posts
+wp ampers check-meta
 
-# Import from staging with custom limit
-wp ampers import-prx --environment=staging --network-id=7 --limit=5
-
-# Import with specific credentials
-wp ampers import-prx --client-id=your_id --client-secret=your_secret --limit=20
+# Delete removed ACF fields (cleanup)
+wp ampers delete-removed-acf-fields
 ```
 
-### Programmatic Usage
+## How It Works
 
-```php
-// Initialize authentication
-$auth = new Ampers\PRXImport\Auth( 'production', $client_id, $client_secret );
+### Import Process
 
-// Test connection
-$result = $auth->test_connection();
-if ( is_wp_error( $result ) ) {
-    echo 'Authentication failed: ' . $result->get_error_message();
-} else {
-    echo 'Authentication successful!';
-}
+1. **Authentication**: Uses OAuth2 to authenticate with PRX API
+2. **Story Retrieval**: Fetches stories from the specified PRX account
+3. **Duplicate Detection**: Checks for existing posts using PRX ID
+4. **Content Creation**: Creates or updates WordPress posts with:
+   - Post title, content, and excerpt
+   - Publication dates
+   - Tags (including 'prx' tag)
+   - Categories (based on series)
+   - Station taxonomy
+   - Featured images
+   - Audio files
+   - ACF custom fields
 
-// Initialize import
-$import = new Ampers\PRXImport\Import( $auth );
+### Cron Job
 
-// Get stories from a network
-$stories = $import->get_network_stories( 7, 1, 10 );
-
-// Import stories
-$results = $import->import_network_stories( 7, 10 );
-```
+The automated cron job:
+- Runs every 3 hours
+- Checks for new stories from the configured account
+- Imports up to 50 stories per run
+- Logs all activities
 
 ## API Reference
 
 ### Auth Class
 
-#### Constructor
-```php
-new Auth( string $environment, string $client_id, string $client_secret )
-```
+Handles OAuth2 authentication with PRX API.
 
-#### Methods
-- `get_access_token()`: Get OAuth2 access token
-- `test_connection()`: Test API connection
-- `get_authorization()`: Get authorization information
-- `make_request( string $endpoint, array $args )`: Make authenticated API request
+```php
+$auth = new Ampers\PRXImport\Auth();
+$result = $auth->test_connection();
+```
 
 ### Import Class
 
-#### Constructor
+Manages content import from PRX to WordPress.
+
 ```php
-new Import( Auth $auth )
+$import = new Ampers\PRXImport\Import( $auth, [ 'dry_run' => false ] );
+$result = $import->import_story( $story_data );
 ```
 
-#### Methods
-- `get_network_stories( int $network_id, int $page, int $per_page )`: Get stories from network
-- `get_story( int $story_id )`: Get specific story
-- `get_network_series( int $network_id, int $page, int $per_page )`: Get series from network
-- `get_series_stories( int $series_id, int $page, int $per_page )`: Get stories from series
-- `import_network_stories( int $network_id, int $limit )`: Import stories from network
-- `import_story( array $story_data )`: Import single story
+### Cron Class
 
-## Testing
+Manages automated import scheduling.
 
-### Standalone Test Script
-
-You can test the authentication system without WordPress:
-
-1. Update the credentials in `test-auth.php`
-2. Run: `php test-auth.php`
-
-### WordPress Integration Test
-
-Test within WordPress:
-
-```bash
-# Test authentication
-wp ampers test-auth
-
-# Test import (will show "not implemented" for now)
-wp ampers import-prx --limit=1
+```php
+$cron = new Ampers\PRXImport\Cron( [
+    'account_id' => 197472,
+    'interval_hours' => 3,
+] );
 ```
+
+### Logger Class
+
+Provides consistent logging across the plugin.
+
+```php
+$logger = Ampers\PRXImport\Logger::get_instance();
+$logger->info( 'Message' );
+$logger->success( 'Success message' );
+$logger->error( 'Error message' );
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Authentication Failed**: Check your PRX client credentials
+2. **Missing ACF Fields**: Import the ACF configuration file
+3. **Cron Job Not Running**: Check WP-Crontrol plugin and server cron setup
+4. **Import Errors**: Use dry-run mode to test without making changes
+
+### Debug Mode
+
+Enable WordPress debug mode for detailed logging:
+
+```php
+define( 'WP_DEBUG', true );
+define( 'WP_DEBUG_LOG', true );
+```
+
+### Logging
+
+The plugin provides comprehensive logging:
+- **WP-CLI**: Direct console output with color coding
+- **WordPress**: Error log integration
+- **Ray**: Debug output when available
 
 ## Development
-
-### Project Structure
-
-```
-ampers-prx-import/
-├── ampers-prx-import.php    # Main plugin file
-├── classes/
-│   ├── class-auth.php       # Authentication handler
-│   ├── class-import.php     # Import functionality
-│   └── class-cli.php        # WP-CLI commands
-├── test-auth.php            # Standalone test script
-└── README.md                # This file
-```
-
-### Adding New Features
-
-1. **New API Endpoints**: Add methods to the `Auth` class
-2. **New Import Types**: Extend the `Import` class
-3. **New CLI Commands**: Add methods to the `CLI` class
-4. **Admin Interface**: Extend the main plugin class
 
 ### Code Standards
 
@@ -189,23 +198,12 @@ ampers-prx-import/
 - Include proper PHPDoc comments
 - Use proper error handling with `WP_Error`
 
-## Troubleshooting
+### Adding Features
 
-### Common Issues
-
-1. **Authentication Failed**: Check your client ID and secret
-2. **Environment Issues**: Ensure you're using the correct environment (staging vs production)
-3. **API Limits**: PRX API has rate limits; implement proper delays if needed
-4. **Missing Dependencies**: Ensure ACF plugin is installed for custom fields
-
-### Debug Mode
-
-Enable WordPress debug mode to see detailed error messages:
-
-```php
-define( 'WP_DEBUG', true );
-define( 'WP_DEBUG_LOG', true );
-```
+1. **New API Endpoints**: Extend the `Auth` class
+2. **New Import Types**: Extend the `Import` class
+3. **New CLI Commands**: Add methods to the `CLI` class
+4. **Cron Modifications**: Update the `Cron` class
 
 ## License
 
@@ -223,6 +221,9 @@ For issues related to:
 ### 2.0.0
 - Complete rewrite with class-based architecture
 - OAuth2 authentication support
-- WP-CLI integration
-- Admin settings interface
-- Support for staging and production environments
+- Automated cron job integration
+- WP-CLI command suite
+- ACF field integration
+- Media import functionality
+- Comprehensive logging system
+- Dry-run mode for testing
