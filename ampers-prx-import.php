@@ -1,15 +1,20 @@
 <?php
 
 /**
- * Plugin Name:      AMPERS PRX Import
- * Plugin URI:       http://ampers.org/
- * Description:      A plugin that enables an bulk options pulldown to delete and reimport prx content from the main WordPress edit posts page.
- * Author:           BizBudding
- * Author URI:       https://bizbudding.com/
- * Version:          2.0.0
- * Text Domain:      prx-import
- * License:          GPL-2.0-or-later
- * License URI:      http://www.gnu.org/licenses/gpl-2.0.html
+ * Plugin Name:       AMPERS PRX Import
+ * Plugin URI:        http://ampers.org/
+ * Description:       Handles importing PRX stories, series, and related content into WordPress Posts.
+ * Version:           2.0.0
+ * Requires at least: 6.5
+ * Requires PHP:      8.2
+ * Requires Plugins:  wp-crontrol
+ *
+ * Author:            BizBudding w/ Flying Orange
+ * Author URI:        https://bizbudding.com/
+ *
+ * Text Domain:       ampers-prx-import
+ * License:           GPL-2.0-or-later
+ * License URI:       http://www.gnu.org/licenses/gpl-2.0.html
  */
 
 namespace Ampers\PRXImport;
