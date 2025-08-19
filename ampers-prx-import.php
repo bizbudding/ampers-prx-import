@@ -28,6 +28,13 @@ require_once __DIR__ . '/classes/class-cron.php';
 require_once __DIR__ . '/classes/class-import.php';
 require_once __DIR__ . '/classes/class-cli.php';
 require_once __DIR__ . '/classes/class-logger.php';
+require_once __DIR__ . '/classes/class-content-types.php';
+
+// Initialize content types.
+$content_types = new ContentTypes();
+
+// Register activation hook for permalink flushing.
+register_activation_hook( __FILE__, [ $content_types, 'on_activate' ] );
 
 // Initialize cron.
 new Cron( [
