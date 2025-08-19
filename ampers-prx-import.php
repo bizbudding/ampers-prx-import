@@ -52,3 +52,23 @@ function account_id() {
 function network_id() {
 	return 7;
 }
+
+// /**
+//  * Dump all WP_Error instances in Spatie Ray app.
+//  *
+//  * @param string|ing $code     Error code.
+//  * @param string     $message  Error message.
+//  * @param mixed      $data     Error data. Might be empty.
+//  * @param WP_Error   $wp_error The WP_Error object.
+//  *
+//  * @return void
+//  */
+// add_action( 'wp_error_added', function( $code, $message, $data, $wp_error ) {
+// 	if ( ! function_exists( 'ray' ) ) {
+// 		return;
+// 	}
+
+// 	ray( $wp_error );
+// 	ray()->trace();
+
+// }, 10, 4 );

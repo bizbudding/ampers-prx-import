@@ -2,6 +2,8 @@
 
 namespace Ampers\PRXImport;
 
+use WP_CLI;
+
 // Exit if accessed directly.
 if ( ! defined( 'ABSPATH' ) ) exit;
 
@@ -75,19 +77,19 @@ class Logger {
 		$formatted = sprintf( '%s [%s]: %s', $this->get_plugin_name(), strtoupper( $type ), $message );
 
 		// If running in WP-CLI, output directly to console.
-		if ( defined( 'WP_CLI' ) && \WP_CLI ) {
+		if ( defined( 'WP_CLI' ) && WP_CLI ) {
 			switch ( $type ) {
 				case 'error':
-					\WP_CLI::error( $formatted );
+					WP_CLI::error( $formatted );
 					break;
 				case 'success':
-					\WP_CLI::success( $formatted );
+					WP_CLI::success( $formatted );
 					break;
 				case 'warning':
-					\WP_CLI::warning( $formatted );
+					WP_CLI::warning( $formatted );
 					break;
 				default:
-					\WP_CLI::log( $formatted );
+					WP_CLI::log( $formatted );
 					break;
 			}
 			return;

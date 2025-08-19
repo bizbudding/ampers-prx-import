@@ -140,6 +140,11 @@ class Import {
 				$post_data['post_content'] = $story_data['shortDescription'] ?? $story_data['description'];
 			}
 
+			// Clean up Word XML markup from content
+			if ( ! empty( $post_data['post_content'] ) ) {
+				$post_data['post_content'] = $this->strip_tags( $post_data['post_content'] );
+			}
+
 			// Check for existing post.
 			$existing_post = $this->get_post_by_prx_id( $story_data['id'] );
 			$action_text   = $existing_post ? 'Updated' : 'Imported';
@@ -161,15 +166,50 @@ class Import {
 
 			// If not a dry run, create or update the post.
 			if ( ! $this->options['dry_run'] ) {
-				$result_post_id = \wp_update_post( $post_data );
+				// Debug: Log the post data being sent (without content)
+				$debug_data = $post_data;
+				$this->logger->info( "Attempting to create post with data: " . print_r( $debug_data, true ) );
 
-				if ( \is_wp_error( $result_post_id ) ) {
-					$this->logger->error( "Failed to create/update post for PRX story {$story_data['id']}" );
-					return new \WP_Error( 'update_failed', 'Failed to create/update post for PRX story ' . $story_data['id'] );
+				try {
+					if ( $existing_post ) {
+						// Update existing post.
+						$result_post_id = \wp_update_post( $post_data );
+					} else {
+						// Create new post.
+						$result_post_id = \wp_insert_post( $post_data );
+					}
+
+					if ( \is_wp_error( $result_post_id ) ) {
+						$this->logger->error( "Failed to create/update post for PRX story {$story_data['id']}" );
+						return new \WP_Error( 'update_failed', 'Failed to create/update post for PRX story ' . $story_data['id'] );
+					}
+
+					// Check if post creation/update returned 0 (failed silently)
+					if ( $result_post_id === 0 ) {
+						$this->logger->error( "Post creation/update returned 0 for PRX story {$story_data['id']} - failed silently" );
+						global $wpdb;
+						$this->logger->error( "Last SQL error: " . $wpdb->last_error );
+
+						// Also check for WordPress errors
+						$wp_errors = \get_option( 'wp_errors' );
+						if ( $wp_errors ) {
+							$this->logger->error( "WordPress errors: " . print_r( $wp_errors, true ) );
+						}
+
+						// Log the complete post data that failed
+						$this->logger->error( "Complete failed post data: " . print_r( $post_data, true ) );
+
+						return new \WP_Error( 'update_failed', 'Post creation failed silently for PRX story ' . $story_data['id'] );
+					}
+
+					// Use the actual post ID returned from wp_insert_post/wp_update_post.
+					$post_id = $result_post_id;
+
+				} catch ( \Exception $e ) {
+					$this->logger->error( "Exception during post creation for PRX story {$story_data['id']}: " . $e->getMessage() );
+					$this->logger->error( "Exception trace: " . $e->getTraceAsString() );
+					return new \WP_Error( 'update_failed', 'Exception during post creation: ' . $e->getMessage() );
 				}
-
-				// Use the actual post ID returned from wp_update_post.
-				$post_id = $result_post_id;
 			}
 
 			// Set ACF fields.
@@ -247,16 +287,11 @@ class Import {
 			$this->logger->info( "DRY RUN: Would set ACF fields for post {$post_id}" );
 			$this->logger->info( "  PRX ID: {$story_data['id']}" );
 			$this->logger->info( "  Duration: {$story_data['duration']} seconds" );
-			$this->logger->info( "  Series: {$story_data['_embedded']['prx:series']['title']}" );
-			$this->logger->info( "  Station: {$story_data['_embedded']['prx:account']['shortName']}" );
 			return;
 		}
 
 		\update_field( $this->acf_keys['prx_id'], $story_data['id'], $post_id );
 		\update_field( $this->acf_keys['duration'], $story_data['duration'], $post_id );
-		\update_field( $this->acf_keys['series_id'], $story_data['_embedded']['prx:series']['id'], $post_id );
-		\update_field( $this->acf_keys['series'], $story_data['_embedded']['prx:series']['title'], $post_id );
-		\update_field( $this->acf_keys['station'], $story_data['_embedded']['prx:account']['shortName'], $post_id );
 		\update_field( $this->acf_keys['transcript'], $story_data['transcript'] ?? '', $post_id );
 	}
 
@@ -326,6 +361,9 @@ class Import {
 				if ( ! empty( $img_args ) || ! empty( $img_args['meta_input'] ) ) {
 					\wp_update_post( $img_args );
 				}
+			} elseif ( ! $this->options['dry_run'] && is_wp_error( $img_id ) ) {
+				// Log the image processing error but don't fail the entire import
+				$this->logger->warning( "Image processing failed for post url: " . get_permalink( $post_id ) . " - " . $img_id->get_error_message() );
 			}
 		}
 	}
@@ -427,6 +465,9 @@ class Import {
 
 		// Bail if error.
 		if ( is_wp_error( $id ) ) {
+			// Log the specific error for debugging
+			$this->logger->warning( "Failed to import media: " . $id->get_error_message() . " for URL: " . $url . " and post: " . get_permalink( $post_id ) );
+
 			// Remove the original image and return the error.
 			@unlink( $file_array[ 'tmp_name' ] );
 			return $id;
@@ -443,6 +484,35 @@ class Import {
 		}
 
 		return $id;
+	}
+
+	/**
+	 * Clean Word XML markup from content.
+	 *
+	 * @since 2.0.0
+	 *
+	 * @param string $content Raw content with Word markup.
+	 *
+	 * @return string Cleaned content.
+	 */
+	private function strip_tags( $content ) {
+		$allowed_tags = [
+			'a',
+			'p',
+			'strong',
+			'em',
+			'ul',
+			'ol',
+			'li',
+			'h1',
+			'h2',
+			'h3',
+			'h4',
+			'h5',
+			'h6',
+		];
+
+		return strip_tags( $content, $allowed_tags );
 	}
 
 	/**
@@ -472,8 +542,8 @@ class Import {
 		}
 
 		// Fallback: check by exact filename.
-		$filename    = basename( parse_url( $url, PHP_URL_PATH ) );
-		$attachment  = $wpdb->get_row( $wpdb->prepare(
+		$filename   = basename( parse_url( $url, PHP_URL_PATH ) );
+		$attachment = $wpdb->get_row( $wpdb->prepare(
 			"SELECT ID FROM {$wpdb->posts}
 			WHERE post_type = 'attachment'
 			AND guid LIKE %s",
