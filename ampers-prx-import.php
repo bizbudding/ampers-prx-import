@@ -4,7 +4,7 @@
  * Plugin Name:       AMPERS PRX Import
  * Plugin URI:        http://ampers.org/
  * Description:       Handles importing PRX stories, series, and related content into WordPress Posts.
- * Version:           2.0.0
+ * Version:           2.1.0
  * Requires at least: 6.5
  * Requires PHP:      8.2
  * Requires Plugins:  wp-crontrol
@@ -24,23 +24,28 @@ defined( 'ABSPATH' ) || exit;
 
 // Load classes.
 require_once __DIR__ . '/classes/class-auth.php';
-require_once __DIR__ . '/classes/class-content-types.php';
 require_once __DIR__ . '/classes/class-cron.php';
 require_once __DIR__ . '/classes/class-import.php';
 require_once __DIR__ . '/classes/class-cli.php';
 require_once __DIR__ . '/classes/class-logger.php';
-
-// Initialize content types.
-$content_types = new ContentTypes();
-
-// Register activation hook for permalink flushing.
-register_activation_hook( __FILE__, [ $content_types, 'on_activate' ] );
 
 // Initialize cron.
 new Cron( [
 	'account_id'     => account_id(),
 	'interval_hours' => 3,
 ] );
+
+register_activation_hook( __FILE__, __NAMESPACE__ . '\on_activate' );
+/**
+ * Plugin activation hook.
+ *
+ * @since 2.1.0
+ *
+ * @return void
+ */
+function on_activate() {
+	flush_rewrite_rules();
+}
 
 /**
  * The account ID to import from.
@@ -60,22 +65,43 @@ function network_id() {
 	return 7;
 }
 
-// /**
-//  * Dump all WP_Error instances in Spatie Ray app.
-//  *
-//  * @param string|ing $code     Error code.
-//  * @param string     $message  Error message.
-//  * @param mixed      $data     Error data. Might be empty.
-//  * @param WP_Error   $wp_error The WP_Error object.
-//  *
-//  * @return void
-//  */
-// add_action( 'wp_error_added', function( $code, $message, $data, $wp_error ) {
-// 	if ( ! function_exists( 'ray' ) ) {
-// 		return;
-// 	}
-
-// 	ray( $wp_error );
-// 	ray()->trace();
-
-// }, 10, 4 );
+add_action( 'init', __NAMESPACE__ . '\register_content_types' );
+/**
+ * Register content types.
+ *
+ * @since 2.1.0
+ *
+ * @return void
+ */
+function register_content_types() {
+	register_taxonomy( 'stations', [ 'post' ], [
+		'hierarchical'               => false,
+		'labels'                     => [
+			'name'                       => _x( 'Stations', 'Station General Name', 'ampers' ),
+			'singular_name'              => _x( 'Station', 'Station Singular Name', 'ampers' ),
+			'menu_name'                  => __( 'Stations', 'ampers' ),
+			'all_items'                  => __( 'All Items', 'ampers' ),
+			'parent_item'                => __( 'Parent Station', 'ampers' ),
+			'parent_item_colon'          => __( 'Parent Station:', 'ampers' ),
+			'new_item_name'              => __( 'New Station Name', 'ampers' ),
+			'add_new_item'               => __( 'Add New Station', 'ampers' ),
+			'edit_item'                  => __( 'Edit Station', 'ampers' ),
+			'update_item'                => __( 'Update Station', 'ampers' ),
+			'view_item'                  => __( 'View Station', 'ampers' ),
+			'separate_items_with_commas' => __( 'Separate stations with commas', 'ampers' ),
+			'add_or_remove_items'        => __( 'Add or remove stations', 'ampers' ),
+			'choose_from_most_used'      => __( 'Choose from the most used', 'ampers' ),
+			'popular_items'              => __( 'Popular Stations', 'ampers' ),
+			'search_items'               => __( 'Search Stations', 'ampers' ),
+			'not_found'                  => __( 'Not Found', 'ampers' ),
+		],
+		'public'                     => true,
+		'show_admin_column'          => true,
+		'show_in_nav_menus'          => true,
+		'show_in_rest'               => true,
+		'show_in_quick_edit'         => true,
+		'show_tagcloud'              => true,
+		'show_ui'                    => true,
+		'rewrite'                    => [ 'slug' => 'stations', 'with_front' => false ],
+	] );
+}
