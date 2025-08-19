@@ -24,11 +24,11 @@ defined( 'ABSPATH' ) || exit;
 
 // Load classes.
 require_once __DIR__ . '/classes/class-auth.php';
+require_once __DIR__ . '/classes/class-content-types.php';
 require_once __DIR__ . '/classes/class-cron.php';
 require_once __DIR__ . '/classes/class-import.php';
 require_once __DIR__ . '/classes/class-cli.php';
 require_once __DIR__ . '/classes/class-logger.php';
-require_once __DIR__ . '/classes/class-content-types.php';
 
 // Initialize content types.
 $content_types = new ContentTypes();
