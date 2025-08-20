@@ -4,7 +4,7 @@
  * Plugin Name:       AMPERS PRX Import
  * Plugin URI:        http://ampers.org/
  * Description:       Handles importing PRX stories, series, and related content into WordPress Posts
- * Version:           2.1.0
+ * Version:           2.2.0
  * Requires at least: 6.5
  * Requires PHP:      8.2
  * Requires Plugins:  wp-crontrol
