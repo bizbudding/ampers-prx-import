@@ -334,7 +334,7 @@ class Import {
 					$this->logger->info( "DRY RUN: Would download new image for URL: {$img_url}" );
 					$this->logger->info( "DRY RUN: Would set new image as featured image" );
 				} else {
-					$img_title = 'IMG: ' . $story_data['title'] . ' - prx_id:' . $story_data['id'] . ', series:' . $story_data['_embedded']['prx:series']['title'] . ', station:' . $story_data['_embedded']['prx:account']['shortName'];
+					$img_title = 'IMG: ' . $story_data['title'] ?? '' . ' - prx_id:' . $story_data['id'] ?? '' . ', series:' . $story_data['_embedded']['prx:series']['title'] ?? '' . ', station:' . $story_data['_embedded']['prx:account']['shortName'] ?? '';
 					$img_id    = $this->download_to_media_library( $img_url, $img_title, $post_id );
 				}
 			}
