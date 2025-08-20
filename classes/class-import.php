@@ -116,9 +116,9 @@ class Import {
 		try {
 			// Start the post data.
 			$post_data = [
-				'post_title'        => $story_data['title'],
-				'post_date_gmt'     => $story_data['publishedAt'],
-				'post_modified_gmt' => $story_data['updatedAt'],
+				'post_title'        => $story_data['title'] ?? '',
+				'post_date_gmt'     => $story_data['publishedAt'] ?? '',
+				'post_modified_gmt' => $story_data['updatedAt'] ?? '',
 				'tags_input'        => $story_data['tags'],
 				'post_status'       => 'publish',
 				'post_type'         => 'post',
@@ -216,7 +216,7 @@ class Import {
 			$this->set_acf_fields( $post_id, $story_data );
 
 			// Set category to series.
-			if ( ! empty( $story_data['_embedded']['prx:series']['title'] ) ) {
+			if ( isset( $story_data['_embedded']['prx:series']['title'] ) && ! empty( $story_data['_embedded']['prx:series']['title'] ) ) {
 				if ( $this->options['dry_run'] ) {
 					$this->logger->info( "DRY RUN: Would set category to {$story_data['_embedded']['prx:series']['title']}" );
 				} else {
@@ -225,7 +225,7 @@ class Import {
 			}
 
 			// Set station taxonomy.
-			if ( ! empty( $story_data['_embedded']['prx:account']['shortName'] ) ) {
+			if ( isset( $story_data['_embedded']['prx:account']['shortName'] ) && ! empty( $story_data['_embedded']['prx:account']['shortName'] ) ) {
 				if ( $this->options['dry_run'] ) {
 					$this->logger->info( "DRY RUN: Would set station to {$story_data['_embedded']['prx:account']['shortName']}" );
 				} else {
@@ -311,11 +311,11 @@ class Import {
 		$img_credit  = '';
 
 		// Get image URL from story or series
-		if ( ! empty( $story_data['_embedded']['prx:image']['_links']['original']['href'] ) ) {
+		if ( isset( $story_data['_embedded']['prx:image']['_links']['original']['href'] ) && ! empty( $story_data['_embedded']['prx:image']['_links']['original']['href'] ) ) {
 			$img_url     = $story_data['_embedded']['prx:image']['_links']['original']['href'];
 			$img_caption = $story_data['_embedded']['prx:image']['caption'] ?? '';
 			$img_credit  = $story_data['_embedded']['prx:image']['credit'] ?? '';
-		} elseif ( ! empty( $story_data['_embedded']['prx:series']['_embedded']['prx:image']['_links']['enclosure']['href'] ) ) {
+		} elseif ( isset( $story_data['_embedded']['prx:series']['_embedded']['prx:image']['_links']['enclosure']['href'] ) && ! empty( $story_data['_embedded']['prx:series']['_embedded']['prx:image']['_links']['enclosure']['href'] ) ) {
 			$img_url = $story_data['_embedded']['prx:series']['_embedded']['prx:image']['_links']['enclosure']['href'];
 		}
 
@@ -379,15 +379,21 @@ class Import {
 	 * @return void
 	 */
 	private function import_story_audio( $post_id, $story_data ) {
-		if ( empty( $story_data['_embedded']['prx:audio']['_embedded']['prx:items'] ) ) {
+		if ( ! isset( $story_data['_embedded']['prx:audio']['_embedded']['prx:items'] ) || empty( $story_data['_embedded']['prx:audio']['_embedded']['prx:items'] ) ) {
 			return;
 		}
 
 		$field_key   = $this->acf_keys['audio'];
+		$items       = $story_data['_embedded']['prx:audio']['_embedded']['prx:items'];
 		$audio_array = [];
 
-		foreach ( $story_data['_embedded']['prx:audio']['_embedded']['prx:items'] as $audio ) {
-			$audio_url   = $audio['_links']['enclosure']['href'];
+		foreach ( $items as $audio ) {
+			$audio_url   = $audio['_links']['enclosure']['href'] ?? '';
+
+			// Skip if no audio URL.
+			if ( empty( $audio_url ) ) {
+				continue;
+			}
 
 			// Check if audio already exists in media library
 			$existing_audio = $this->get_media_by_url( $audio_url );
@@ -401,7 +407,7 @@ class Import {
 				if ( $this->options['dry_run'] ) {
 					$this->logger->info( "DRY RUN: Would download new audio for URL: {$audio_url}" );
 				} else {
-					$audio_title = 'MP3: ' . $story_data['title'] . ' - prx_id:' . $story_data['id'] . ', series:' . $story_data['_embedded']['prx:series']['title'] . ', station:' . $story_data['_embedded']['prx:account']['shortName'];
+					$audio_title = 'MP3: ' . $story_data['title'] ?? '' . ' - prx_id:' . $story_data['id'] ?? '' . ', series:' . $story_data['_embedded']['prx:series']['title'] ?? '' . ', station:' . $story_data['_embedded']['prx:account']['shortName'] ?? '';
 					$audio_id    = $this->download_to_media_library( $audio_url, $audio_title, $post_id );
 				}
 			}
@@ -409,8 +415,8 @@ class Import {
 			if ( ! $this->options['dry_run'] && ! is_wp_error( $audio_id ) && $audio_id ) {
 				$audio_array[] = [
 					$this->acf_keys['audio_mp3']    => $audio_id,
-					$this->acf_keys['audio_label']  => $audio['label'],
-					$this->acf_keys['audio_length'] => $audio['duration'],
+					$this->acf_keys['audio_label']  => $audio['label'] ?? '',
+					$this->acf_keys['audio_length'] => $audio['duration'] ?? '',
 				];
 			}
 		}
@@ -583,19 +589,19 @@ class Import {
 		$log_data = array_merge( $log_data, [
 			'prx_id'    => $story_data['id'],
 			'title'     => $story_data['title'],
-			'duration'  => $story_data['duration'] . ' seconds',
-			'series'    => $story_data['_embedded']['prx:series']['title'],
-			'station'   => $story_data['_embedded']['prx:account']['shortName'],
+			'duration'  => $story_data['duration'] ?? '' . ' seconds',
+			'series'    => $story_data['_embedded']['prx:series']['title'] ?? '',
+			'station'   => $story_data['_embedded']['prx:account']['shortName'] ?? '',
 		] );
 
 		// Add description.
-		if ( ! empty( $story_data['description'] ) ) {
-			$log_data['description'] = substr( strip_tags( $story_data['description'] ), 0, 100 ) . '...';
+		if ( isset( $story_data['description'] ) && ! empty( $story_data['description'] ) ) {
+			$log_data['description'] = substr( strip_tags( $story_data['description'] ?? '' ), 0, 100 ) . '...';
 		}
 
 		// Add transcript.
-		if ( ! empty( $story_data['transcript'] ) ) {
-			$log_data['transcript'] = substr( $story_data['transcript'], 0, 100 ) . '...';
+		if ( isset( $story_data['transcript'] ) && ! empty( $story_data['transcript'] ) ) {
+			$log_data['transcript'] = substr( $story_data['transcript'] ?? '', 0, 100 ) . '...';
 		}
 
 		$this->logger->info( 'Story data: ' . print_r( $log_data, true ) );

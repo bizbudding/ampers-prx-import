@@ -103,7 +103,7 @@ class CLI {
 		WP_CLI::log( "Account ID: {$account_id}, Per Page: {$per_page}, Page: {$page}" . ( $dry_run ? ', DRY RUN' : '' ) );
 
 		// Test authentication first
-		$auth = new Auth();
+		$auth        = new Auth();
 		$auth_result = $auth->test_connection();
 
 		if ( is_wp_error( $auth_result ) ) {
@@ -131,7 +131,7 @@ class CLI {
 			return;
 		}
 
-		if ( empty( $stories['_embedded']['prx:items'] ) ) {
+		if ( ! isset( $stories['_embedded']['prx:items'] ) || empty( $stories['_embedded']['prx:items'] ) ) {
 			WP_CLI::warning( 'No stories found for this account.' );
 			return;
 		}

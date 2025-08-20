@@ -69,7 +69,7 @@ class Auth {
 	public function __construct( $environment = '' ) {
 		$this->environment = $environment ?? $this->get_environment_from_wp();
 
-		// Get credentials from constants if not provided
+		// Get credentials from constants if not provided.
 		$this->client_id     = $this->get_client_id();
 		$this->client_secret = $this->get_client_secret();
 	}
