@@ -455,8 +455,6 @@ class Import {
 
 		// Bail if error.
 		if ( is_wp_error( $tmp ) ) {
-			// Remove the original image and return the error.
-			@unlink( $tmp );
 			return $tmp;
 		}
 
